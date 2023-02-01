@@ -1,0 +1,105 @@
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+
+extern void debug(const char *fmt, ...);
+extern void *sbrk(intptr_t increment);
+
+unsigned int max_size;
+
+#define BLOCK_SIZE 20
+
+typedef struct block_header {
+  size_t size;
+  struct block_header *next;
+  int free;
+  char data[1];
+} block_header;
+
+block_header *head = NULL;
+
+block_header *find_free_block(size_t size) 
+{
+    block_header *current = head;
+    while (current != NULL) 
+    {
+        if (current->free && current->size >= size) 
+        {
+            return current;
+        }
+        current = current->next;
+    }
+    return NULL;
+}
+
+void *myalloc(size_t size)
+{
+    if (size <= 0)
+        return NULL;
+
+    block_header *block = head;
+    block_header *prev = NULL;
+    while (block != NULL) 
+    {
+        if (block->free && block->size >= size) 
+        {
+            block->free = 0;
+            return block->data;
+        }
+        prev = block;
+        block = block->next;
+    }
+
+    block = sbrk(0);
+    void *request = sbrk(size + sizeof(block_header));
+    if (request == (void *) -1)
+        return NULL;
+
+    block->size = size;
+    block->next = NULL;
+    block->free = 0;
+    if (prev != NULL)
+        prev->next = block;
+
+    max_size += size;
+    return block->data;
+}
+
+void myfree(void *ptr)
+{
+    if (ptr == NULL)
+        return;
+
+    block_header *block = (block_header *) (ptr - sizeof(block_header));
+    block->free = 1;
+    debug("free(%p)\n", ptr);
+}
+
+void *myrealloc(void *ptr, size_t size)
+{
+    if (ptr == NULL)
+        return myalloc(size);
+
+    if (size <= 0) 
+    {
+        myfree(ptr);
+        return NULL;
+    }
+
+    block_header *block = (block_header *) (ptr - sizeof(block_header));
+    if (block->size >= size)
+        return ptr;
+
+    void *new_ptr = myalloc(size);
+    if (new_ptr == NULL)
+        return NULL;
+
+    size_t copy_size = block->size;
+    if (copy_size > size)
+        copy_size = size;
+
+    memcpy(new_ptr, ptr, copy_size);
+    myfree(ptr);
+    debug("realloc(%p, %u): %p\n", ptr, (unsigned int)size, new_ptr);
+    return new_ptr;
+}
