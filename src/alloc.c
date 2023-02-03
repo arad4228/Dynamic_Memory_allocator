@@ -3,6 +3,7 @@
 #include <string.h>
 
 #define POOL_SIZE 1024*1024*1024
+#define ALIGN_SIZE 4
 
 extern void debug(const char *fmt, ...);
 extern void *sbrk(intptr_t increment);
@@ -31,6 +32,11 @@ void *myalloc(size_t size)
         // handle error, out of memory
         return NULL;
     }
+    int alignment_bytes = ALIGN_SIZE - (pool_index % ALIGN_SIZE);
+    if (alignment_bytes == ALIGN_SIZE) {
+        alignment_bytes = 0;
+    }
+    pool_index += alignment_bytes;
     void *result = &memory_pool[pool_index];
     pool_index += size;
     return result;
