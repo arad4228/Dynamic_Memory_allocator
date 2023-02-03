@@ -6,79 +6,77 @@ extern void debug(const char *fmt, ...);
 extern void *sbrk(intptr_t increment);
 
 typedef struct block {
-    struct block *next;
-    int size_used;
+    struct block* next;
+    size_t size;
+    uint8_t used;
     char data[1];
 } Block;
 
-Block *head = NULL;
+Block* head = NULL;
 
-void *myalloc(size_t size) {
-    if (size <= 0) {
+void *myalloc(size_t size)
+{
+    if (size <= 0)
         return NULL;
-    }
 
-    Block *curr = head;
-    Block *prev = NULL;
+    Block* curr = head;
+    Block* prev = NULL;
 
-    while (curr != NULL) {
-        if (!(curr->size_used & 1) && (curr->size_used >> 1) >= size) {
-            curr->size_used = curr->size_used | 1;
+    // Look for a block with enough space
+    while (curr != NULL)
+    {
+        if (!curr->used && curr->size >= size)
+        {
+            // Update the used field to indicate the block is now in use
+            curr->used = 1;
             return curr->data;
         }
         prev = curr;
         curr = curr->next;
     }
 
-    curr = sbrk(0);
-    void *pData = sbrk(sizeof(Block) + size);
+    // Allocate a new block if no suitable block was found
+    void* pData = sbrk(size + sizeof(Block));
 
-    if (pData == (void*) -1) {
+    // Check if allocation failed
+    if (pData == (void*) -1)
         return NULL;
-    }
-
-    curr->size_used = (size << 1) | 1;
+    
+    curr = (Block*)pData;
+    curr->size = size;
+    curr->used = 1;
     curr->next = NULL;
-    if (prev != NULL) {
+    if (prev != NULL)
         prev->next = curr;
-    }
-
+    
     return curr->data;
 }
 
-void myfree(void *ptr) {
-    if (ptr == NULL) {
+void myfree(void *ptr)
+{
+    if (ptr == NULL)
         return;
-    }
-    Block *curr = (Block*) (ptr - sizeof(Block));
-    curr->size_used &= ~1;
+    Block* curr = (Block*) (ptr - sizeof(Block));
+    curr->used = 0;
 }
 
-void *myrealloc(void *ptr, size_t size) {
-    if (ptr == NULL) {
+void *myrealloc(void *ptr, size_t size)
+{
+    // If there is no existing space, allocate new space
+    if (ptr == NULL)
         return myalloc(size);
-    }
-
-    if (size <= 0) {
+    
+    // If size is 0, free the existing space
+    if (size <= 0)
+    {
         myfree(ptr);
         return NULL;
     }
-
-    Block *curr = (Block*) (ptr - sizeof(Block));
-    if ((curr->size_used >> 1) >= size) {
-        return ptr;
-    }
-
-    void *new_pData = myalloc(size);
-    if (new_pData == NULL) {
-        return NULL;
-    }
-
-    size_t originsize = curr->size_used >> 1;
-    if (originsize > size) {
-        originsize = size;
-    }
-    memcpy(new_pData, ptr, originsize);
+    
+    // Otherwise, allocate new space and copy over the data
+    Block* curr = (Block*) (ptr - sizeof(Block));
+    void* new_ptr = myalloc(size);
+    memcpy(new_ptr, ptr, curr->size > size ? size : curr->size);
     myfree(ptr);
-    return new_pData;
+    return new_ptr;
 }
